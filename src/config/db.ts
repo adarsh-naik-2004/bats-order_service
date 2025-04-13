@@ -1,5 +1,5 @@
 import mongoose from "mongoose";
-import config from "config";
+
 import logger from "./logger";
 
 const connectDB = async () => {
@@ -12,7 +12,9 @@ const connectDB = async () => {
       logger.error("Error in connecting to database.", err);
     });
 
-    await mongoose.connect(config.get("database.url"));
+    mongoose.connect('mongodb://user:pass@localhost:27017/catlog_db?authSource=admin')
+    .then(() => console.log('✅ Connected to MongoDB'))
+    .catch((err) => console.error('❌ Connection failed:', err))
   } catch (err) {
     logger.error("Error in connecting to database.", err);
     process.exit(1);

@@ -7,7 +7,6 @@ const router = express.Router();
 const customerController = new CustomerController();
 
 router.get("/", authenticate, asyncWrapper(customerController.getCustomer));
-
 router.patch(
   "/addresses/:id",
   authenticate,
