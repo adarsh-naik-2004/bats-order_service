@@ -29,7 +29,6 @@ export class CouponController {
       return next(error);
     }
 
-    // validate expiry
     const currentDate = new Date();
     const couponDate = new Date(coupon.validUpto);
 
