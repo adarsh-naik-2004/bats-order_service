@@ -16,7 +16,7 @@ export interface AuthRequest extends Request {
 
 
 export interface PriceConfiguration {
-  priceType: "base" | "aditional";
+  priceType: "base" | "additional";
   availableOptions: {
     [key: string]: number;
   };
@@ -45,7 +45,7 @@ export interface AccessoryMessage {
 
 export interface ProductPriceConfiguration {
   [key: string]: {
-    priceType: "base" | "aditional";
+    priceType: "base" | "additional";
     availableOptions: {
       [key: string]: number;
     };
@@ -77,3 +77,10 @@ export interface CartItem
   };
   qty: number;
 }
+
+export enum ROLES {
+  ADMIN = "admin",
+  CUSTOMER = "customer",
+  MANAGER = "manager",
+}
+

@@ -4,24 +4,35 @@ import { ProductPricingCache } from "../types";
 const priceSchema = new mongoose.Schema({
   priceType: {
     type: String,
-    enum: ["base", "aditional"],
+    enum: ["base", "additional"],
+    required: true
   },
   availableOptions: {
-    type: Object,
+    type: Map,
     of: Number,
+    required: true
   },
-});
+}, { _id: false });
 
-const productCacheSchema = new mongoose.Schema<ProductPricingCache>({
-  productId: {
-    type: String,
-    required: true,
+const productCacheSchema = new mongoose.Schema<ProductPricingCache>(
+  {
+    productId: {
+      type: String,
+      required: true,
+      unique: true
+    },
+    priceConfiguration: {
+      type: Map,
+      of: priceSchema,
+      required: true
+    },
   },
-  priceConfiguration: {
-    type: Object,
-    of: priceSchema,
-  },
-});
+  {
+    timestamps: true,
+    toObject:  { flattenMaps: true },  // ← here
+    toJSON:    { flattenMaps: true },  // ← and here
+  }
+);
 
 export default mongoose.model(
   "ProductPricingCache",

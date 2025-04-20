@@ -30,7 +30,7 @@ const cartSchema = new mongoose.Schema<CartItem>({
     of: {
       priceType: {
         type: String,
-        enum: ["base", "aditional"],
+        enum: ["base", "additional"],
         required: true,
       },
       availableOptions: {
@@ -46,12 +46,7 @@ const cartSchema = new mongoose.Schema<CartItem>({
       of: String,
       required: true,
     },
-    selectedAccessorys: [
-      {
-        type: [accessorySchema],
-        required: true,
-      },
-    ],
+    selectedAccessorys: [accessorySchema]
   },
 });
 
