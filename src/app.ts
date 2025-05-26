@@ -5,8 +5,18 @@ import customerRouter from "./customer/customerRouter";
 import couponRouter from "./coupon/couponRouter";
 import orderRouter from "./order/orderRouter";
 import paymentRouter from "./payment/paymentRouter";
+import config from "config";
+import cors from "cors";
 
 const app = express();
+
+const ALLOWED_DOMAINS = [
+  config.get("frontend.clientUI"),
+  config.get("frontend.adminUI"),
+];
+
+app.use(cors({ origin: ALLOWED_DOMAINS as string[], credentials: true }));
+
 app.use(cookieParser());
 app.use(express.json());
 

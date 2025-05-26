@@ -6,7 +6,11 @@ auth:
 database:
   url: mongodb+srv://order:order@cluster.wkcu5.mongodb.net/order?retryWrites=true&w=majority&appName=Cluster
 kafka:
-  broker: localhost:9092
+  broker: 
+    - localhost:9092
+  sasl:
+    username: ''
+    password: ''
 razorpay:
   keyId: rzp_test_AsM8JZVbJPRkdy
   secretKey: tztgtHbuzdD6DnXOZpG9IZUl
@@ -14,3 +18,7 @@ razorpay:
 
 catlog:
   url: http://localhost:8000/api/catalog
+
+frontend:
+  clientUI: http://localhost:3000
+  adminUI: http://localhost:5173

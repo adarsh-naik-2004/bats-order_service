@@ -1,9 +1,9 @@
 export interface PaymentOptions {
-  currency?: "inr";
+  currency?: "INR";
   amount: number;
   orderId: string;
   storeId: string;
-  idempotenencyKey?: string;
+  idempotencyKey?: string;
 }
 type GatewayPaymentStatus = "no_payment_required" | "paid" | "unpaid";
 

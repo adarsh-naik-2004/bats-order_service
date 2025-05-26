@@ -116,10 +116,14 @@ export class OrderController {
         amount: finalTotal,
         orderId: newOrder[0]._id.toString(),
         storeId: storeId,
-        currency: "inr",
-        idempotenencyKey: idempotencyKey as string,
+        currency: "INR",
+        idempotencyKey: idempotencyKey as string,
       });
 
+      if (!session) {
+        return next(createHttpError(500, "Payment gateway error."));
+      }
+      
       await this.broker.sendMessage(
         "order",
         JSON.stringify(brokerMessage),
