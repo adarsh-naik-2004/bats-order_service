@@ -1,7 +1,7 @@
 // razorpay.ts
 import Razorpay from 'razorpay';
 import crypto from 'crypto';
-import config from 'config';
+import { Config } from '../config/index';
 import {
   PaymentGW,
   PaymentOptions,
@@ -14,8 +14,8 @@ export class RazorpayGW implements PaymentGW {
 
   constructor() {
     this.razorpay = new Razorpay({
-      key_id: config.get<string>('razorpay.keyId'), // Add type assertion
-      key_secret: config.get<string>('razorpay.secretKey'),
+      key_id: Config.razorpay.keyId, // Add type assertion
+      key_secret: Config.razorpay.secretKey,
     });
   }
 
@@ -65,7 +65,7 @@ export class RazorpayGW implements PaymentGW {
 
   verifyWebhookSignature(body: unknown, signature: string): boolean {
     try {
-      const webhookSecret = config.get<string>('razorpay.webhookSecret'); // Add type assertion
+      const webhookSecret = Config.razorpay.webhookSecret; // Add type assertion
       const generatedSignature = crypto
         .createHmac('sha256', webhookSecret)
         .update(JSON.stringify(body))

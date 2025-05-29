@@ -1,11 +1,11 @@
 import mongoose from "mongoose";
-import config from "config";
+import { Config } from "./index";
 import logger from "./logger";
 
 const connectDB = async () => {
   try {
 
-    const dbURI: string = config.get("database.url");
+    const dbURI: string = Config.database.url;
 
     mongoose.connection.on("connected", () => {
       logger.info("Connected to database successfully");

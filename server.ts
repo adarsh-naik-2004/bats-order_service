@@ -1,12 +1,12 @@
 import app from "./src/app";
-import config from "config";
+import { Config } from "./src/config/index";
 import logger from "./src/config/logger";
 import connectDB from "./src/config/db";
 import { MessageBroker } from "./src/types/broker";
 import { createMessageBroker } from "./src/common/factories/brokerFactory";
 
 const startServer = async () => {
-  const PORT = config.get("server.port") || 5503;
+  const PORT = Config.server.port;
 
   let broker: MessageBroker | null = null;
 

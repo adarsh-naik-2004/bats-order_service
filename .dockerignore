@@ -2,10 +2,6 @@
 node_modules
 npm-debug.log
 
-# Local environment
-.env
-.env.* 
-
 # Logs
 *.log
 logs

@@ -2,7 +2,7 @@ import { Consumer, EachMessagePayload, Kafka, KafkaConfig, Producer } from "kafk
 import { MessageBroker } from "../types/broker";
 import { handleProductUpdate } from "../productCache/productUpdateHandler";
 import { handleAccessoryUpdate } from "../accessoryCache/accessoryUpdateHandler";
-import config from 'config'
+import { Config } from './index'
 
 export class KafkaBroker implements MessageBroker {
   private consumer: Consumer;
@@ -13,15 +13,15 @@ export class KafkaBroker implements MessageBroker {
       clientId,
       brokers,
     };
-    if (process.env.NODE_ENV === "production") {
+    if (Config.env.nodeEnv === "production") {
       kafkaConfig = {
         ...kafkaConfig,
         ssl: true,
         connectionTimeout: 45000,
         sasl: {
           mechanism: "plain",
-          username: config.get("kafka.sasl.username"),
-          password: config.get("kafka.sasl.password"),
+          username: Config.kafka.sasl.username,
+          password: Config.kafka.sasl.password,
         },
       };
     }
