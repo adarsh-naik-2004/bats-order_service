@@ -306,10 +306,31 @@ export class OrderController {
   };
 
 
+  private async verifyProductCache(productIds: string[]) {
+  const cachedProducts = await productCacheModel.find({
+    productId: { $in: productIds }
+  });
+
+  const missingIds = productIds.filter(id => 
+    !cachedProducts.some(p => p.productId === id)
+  );
+
+  if (missingIds.length > 0) {
+    throw new Error(
+      `Missing price configurations for products: ${missingIds.join(', ')}. ` +
+      `Sync catalog data first.`
+    );
+  }
+}
+
+
+
   private calculateTotal = async (cart: CartItem[]) => {
 
     
     const productIds = cart.map((item) => item._id);
+
+    await this.verifyProductCache(productIds);
 
     const productPricings = await productCacheModel.find({
       productId: {

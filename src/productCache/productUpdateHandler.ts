@@ -1,30 +1,53 @@
 import productCacheModel from "./productCacheModel";
 
+// Define type for price dimension configuration
+type PriceDimension = {
+  _id?: string;
+  priceType: string;
+  availableOptions: Record<string, number | null>;
+};
+
 export const handleProductUpdate = async (value: string) => {
   const message = JSON.parse(value);
-
   const product = message.data;
 
-  console.log("🔁 Handling product update for:", product.id );
-  console.log("📦 Raw price config:", JSON.stringify(product.priceConfiguration, null, 2));
+  // Deep clean priceConfiguration by removing nested _id fields
+  const cleanedPriceConfig: Record<string, Omit<PriceDimension, '_id'>> = {};
+  
+  for (const [dimension, config] of Object.entries(product.priceConfiguration)) {
+    // Safe type casting with fallback
+    const typedConfig = config as PriceDimension;
+    const { ...cleanConfig } = typedConfig;
+    
+    // Clean availableOptions - remove null values
+    if (cleanConfig.availableOptions) {
+      cleanConfig.availableOptions = Object.fromEntries(
+        Object.entries(cleanConfig.availableOptions)
+          .filter(([value]) => value !== null)
+      );
+    }
+    
+    cleanedPriceConfig[dimension] = cleanConfig;
+  }
 
   try {
-    const result = await productCacheModel.updateOne(
+    await productCacheModel.updateOne(
       { productId: product.id },
       {
         $set: {
           productId: product.id,
-          priceConfiguration: product.priceConfiguration,
+          priceConfiguration: cleanedPriceConfig,
         },
       },
       { upsert: true }
     );
-
-    console.log("✅ Mongo Update Result:", result);
+    
+    console.log(`✅ Updated cache for product: ${product.id}`);
   } catch (err) {
-    console.error("❌ Mongo Update Error:", err);
+    if (err instanceof Error) {
+      console.error(`❌ Failed to update cache for ${product.id}:`, err.message);
+    } else {
+      console.error(`❌ Failed to update cache for ${product.id}:`, String(err));
+    }
   }
-
-  const updated = await productCacheModel.findOne({ productId: product.id }).lean({ flattenMaps: true });
-  console.log("📦 Final Document in DB:", JSON.stringify(updated, null, 2));
 };
