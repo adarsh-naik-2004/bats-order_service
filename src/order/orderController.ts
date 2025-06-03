@@ -63,6 +63,11 @@ export class OrderController {
     const idempotencyKey = req.headers["idempotency-key"];
     const idempotency = await idempotencyModel.findOne({ key: idempotencyKey });
 
+    const customer = await customerModel.findById(customerId);
+    if (!customer) {
+      return next(createHttpError(400, "Customer not found"));
+    }
+
     let newOrder = idempotency ? [idempotency.response] : [];
 
     if (!idempotency) {
@@ -108,7 +113,7 @@ export class OrderController {
 
     const brokerMessage = {
       event_type: OrderEvents.ORDER_CREATE,
-      data: newOrder[0],
+      data: { ...newOrder[0], customerEmail: customer.email }
     };
 
     if (paymentMode === PaymentMode.CARD) {
@@ -281,6 +286,9 @@ export class OrderController {
         return next(createHttpError(403, "Not allowed."));
       }
 
+
+      
+
       const updatedOrder = await orderModel.findOneAndUpdate(
         { _id: orderId },
         // todo: req.body.status <- Put proper validation.
@@ -288,9 +296,15 @@ export class OrderController {
         { new: true },
       );
 
+
+      const customer = await customerModel.findById(updatedOrder.customerId);
+      if (!customer) {
+        console.log(`Customer not found for order: ${updatedOrder._id}`);
+      }
+
       const brokerMessage = {
         event_type: OrderEvents.ORDER_STATUS_UPDATE,
-        data: updatedOrder,
+        data: { ...updatedOrder, customerEmail: customer?.email },
       };
 
       await this.broker.sendMessage(
