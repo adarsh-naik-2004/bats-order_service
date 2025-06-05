@@ -11,7 +11,12 @@ import productCacheModel from "../productCache/productCacheModel";
 import accessoryCacheModel from "../accessoryCache/accessoryCacheModel";
 import couponModel from "../coupon/couponModel";
 import orderModel from "./orderModel";
-import { OrderEvents, OrderStatus, PaymentMode, PaymentStatus } from "./orderTypes";
+import {
+  OrderEvents,
+  OrderStatus,
+  PaymentMode,
+  PaymentStatus,
+} from "./orderTypes";
 import { PaymentGW } from "../payment/paymentTypes";
 import { MessageBroker } from "../types/broker";
 import idempotencyModel from "../idempotency/idempotencyModel";
@@ -19,12 +24,10 @@ import createHttpError from "http-errors";
 import mongoose from "mongoose";
 import customerModel from "../customer/customerModel";
 export class OrderController {
-
   constructor(
     private paymentGw: PaymentGW,
     private broker: MessageBroker,
   ) {}
-
 
   create = async (req: Request, res: Response, next: NextFunction) => {
     const {
@@ -36,7 +39,6 @@ export class OrderController {
       comment,
       address,
     } = req.body;
-
 
     const totalPrice = await this.calculateTotal(cart);
 
@@ -113,7 +115,7 @@ export class OrderController {
 
     const brokerMessage = {
       event_type: OrderEvents.ORDER_CREATE,
-      data: { ...newOrder[0], customerEmail: customer.email }
+      data: { ...newOrder[0], customerEmail: customer.email },
     };
 
     if (paymentMode === PaymentMode.CARD) {
@@ -128,7 +130,7 @@ export class OrderController {
       if (!session) {
         return next(createHttpError(500, "Payment gateway error."));
       }
-      
+
       await this.broker.sendMessage(
         "order",
         JSON.stringify(brokerMessage),
@@ -144,7 +146,6 @@ export class OrderController {
       newOrder[0]._id.toString(),
     );
 
-  
     return res.json({ newOrder: newOrder });
   };
 
@@ -286,16 +287,12 @@ export class OrderController {
         return next(createHttpError(403, "Not allowed."));
       }
 
-
-      
-
       const updatedOrder = await orderModel.findOneAndUpdate(
         { _id: orderId },
         // todo: req.body.status <- Put proper validation.
         { orderStatus: req.body.status },
         { new: true },
       );
-
 
       const customer = await customerModel.findById(updatedOrder.customerId);
       if (!customer) {
@@ -304,7 +301,11 @@ export class OrderController {
 
       const brokerMessage = {
         event_type: OrderEvents.ORDER_STATUS_UPDATE,
-        data: { ...updatedOrder, customerEmail: customer?.email },
+        data: {
+          orderId: updatedOrder._id.toString(),
+          ...updatedOrder.toObject(),
+          customerEmail: customer?.email,
+        },
       };
 
       await this.broker.sendMessage(
@@ -319,40 +320,36 @@ export class OrderController {
     return next(createHttpError(403, "Not allowed."));
   };
 
-
   private async verifyProductCache(productIds: string[]) {
-  const cachedProducts = await productCacheModel.find({
-    productId: { $in: productIds }
-  });
+    const cachedProducts = await productCacheModel.find({
+      productId: { $in: productIds },
+    });
 
-  const missingIds = productIds.filter(id => 
-    !cachedProducts.some(p => p.productId === id)
-  );
-
-  if (missingIds.length > 0) {
-    throw new Error(
-      `Missing price configurations for products: ${missingIds.join(', ')}. ` +
-      `Sync catalog data first.`
+    const missingIds = productIds.filter(
+      (id) => !cachedProducts.some((p) => p.productId === id),
     );
+
+    if (missingIds.length > 0) {
+      throw new Error(
+        `Missing price configurations for products: ${missingIds.join(", ")}. ` +
+          `Sync catalog data first.`,
+      );
+    }
   }
-}
-
-
 
   private calculateTotal = async (cart: CartItem[]) => {
-
-    
     const productIds = cart.map((item) => item._id);
 
     await this.verifyProductCache(productIds);
 
-    const productPricings = await productCacheModel.find({
-      productId: {
-        $in: productIds,
-      },
-    }).lean({ flattenMaps: true });
+    const productPricings = await productCacheModel
+      .find({
+        productId: {
+          $in: productIds,
+        },
+      })
+      .lean({ flattenMaps: true });
 
-    
     // 1. call catalog service.
     // 2. Use price from cart <- BAD
 
@@ -378,7 +375,8 @@ export class OrderController {
 
       return (
         acc +
-        curr.qty * this.getItemTotal(curr, cachedProductPrice, accessoryPricings)
+        curr.qty *
+          this.getItemTotal(curr, cachedProductPrice, accessoryPricings)
       );
     }, 0);
 
@@ -393,42 +391,47 @@ export class OrderController {
     if (!cachedProductPrice?.priceConfiguration) {
       throw new Error(
         `Missing price configuration for product ${item._id}. ` +
-        `Sync catalog data first.`
+          `Sync catalog data first.`,
       );
     }
-  
+
     const accessorysTotal = item.chosenConfiguration.selectedAccessorys.reduce(
-      (acc, curr) => acc + this.getCurrentAccessoryPrice(curr, accessorysPricings),
+      (acc, curr) =>
+        acc + this.getCurrentAccessoryPrice(curr, accessorysPricings),
       0,
     );
-    
-    console.log("Available cached dimensions:", Object.keys(cachedProductPrice.priceConfiguration));
-    console.log("Chosen dimensions:", Object.keys(item.chosenConfiguration.priceConfiguration));
 
-
-    const productTotal = Object.entries(item.chosenConfiguration.priceConfiguration).reduce(
-      (acc, [dimensionName, selectedOption]) => {
-        const dimension = cachedProductPrice.priceConfiguration[dimensionName];
-        if (!dimension) {
-          throw new Error(`Dimension '${dimensionName}' not found in cached product config.`);
-        }
-  
-        const price = dimension.availableOptions[selectedOption];
-        if (price === undefined) {
-          throw new Error(
-            `Option '${selectedOption}' not found for dimension '${dimensionName}' in cached config.`,
-          );
-        }
-  
-        return acc + price;
-      },
-      0,
+    console.log(
+      "Available cached dimensions:",
+      Object.keys(cachedProductPrice.priceConfiguration),
     );
-  
+    console.log(
+      "Chosen dimensions:",
+      Object.keys(item.chosenConfiguration.priceConfiguration),
+    );
+
+    const productTotal = Object.entries(
+      item.chosenConfiguration.priceConfiguration,
+    ).reduce((acc, [dimensionName, selectedOption]) => {
+      const dimension = cachedProductPrice.priceConfiguration[dimensionName];
+      if (!dimension) {
+        throw new Error(
+          `Dimension '${dimensionName}' not found in cached product config.`,
+        );
+      }
+
+      const price = dimension.availableOptions[selectedOption];
+      if (price === undefined) {
+        throw new Error(
+          `Option '${selectedOption}' not found for dimension '${dimensionName}' in cached config.`,
+        );
+      }
+
+      return acc + price;
+    }, 0);
+
     return productTotal + accessorysTotal;
   };
-  
-  
 
   private getCurrentAccessoryPrice = (
     accessory: Accessory,
