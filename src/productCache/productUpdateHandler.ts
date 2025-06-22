@@ -11,8 +11,8 @@ export const handleProductUpdate = async (value: string) => {
   const message = JSON.parse(value);
 
   if (
-    message.type == 'PRODUCT_CREATE' ||
-    message.type == 'PRODUCT_UPDATE'
+    message.event_type == 'PRODUCT_CREATE' ||
+    message.event_type == 'PRODUCT_UPDATE'
   ) {
     const product = message.data;
 
