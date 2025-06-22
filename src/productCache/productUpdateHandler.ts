@@ -1,6 +1,5 @@
 import productCacheModel from "./productCacheModel";
 
-// Define type for price dimension configuration
 type PriceDimension = {
   _id?: string;
   priceType: string;
@@ -8,61 +7,65 @@ type PriceDimension = {
 };
 
 export const handleProductUpdate = async (value: string) => {
-  const message = JSON.parse(value);
+  try {
+    const message = JSON.parse(value);
 
-  if (
-    message.event_type == 'PRODUCT_CREATE' ||
-    message.event_type == 'PRODUCT_UPDATE'
-  ) {
-    const product = message.data;
+    const eventType = message.event_type;
+    const productData = message.data;
 
-    // Deep clean priceConfiguration by removing nested _id fields
-    const cleanedPriceConfig: Record<string, Omit<PriceDimension, "_id">> = {};
-
-    for (const [dimension, config] of Object.entries(
-      product.priceConfiguration,
-    )) {
-      // Safe type casting with fallback
-      const typedConfig = config as PriceDimension;
-      const { ...cleanConfig } = typedConfig;
-
-      // Clean availableOptions - remove null values
-      if (cleanConfig.availableOptions) {
-        cleanConfig.availableOptions = Object.fromEntries(
-          Object.entries(cleanConfig.availableOptions).filter(
-            ([value]) => value !== null,
-          ),
-        );
-      }
-
-      cleanedPriceConfig[dimension] = cleanConfig;
+    if (!productData || !productData.id || !productData.priceConfiguration) {
+      console.log("Skipping invalid product message:", message);
+      return;
     }
 
-    try {
-      await productCacheModel.updateOne(
-        { productId: product.id },
-        {
-          $set: {
-            productId: product.id,
-            priceConfiguration: cleanedPriceConfig,
-          },
-        },
+    if (eventType === "PRODUCT_CREATE" || eventType === "PRODUCT_UPDATE") {
+      console.log(`Processing ${eventType} for product: ${productData.id}`);
+
+      const cleanedPriceConfig: Record<string, Partial<PriceDimension>> = {};
+
+      for (const [dimension, config] of Object.entries(
+        productData.priceConfiguration,
+      )) {
+        const typedConfig = config as PriceDimension;
+
+        const cleanConfig: Partial<PriceDimension> = {
+          priceType: typedConfig.priceType,
+          availableOptions: {},
+        };
+
+        if (typedConfig.availableOptions) {
+          for (const [option, price] of Object.entries(
+            typedConfig.availableOptions,
+          )) {
+            if (price !== null) {
+              cleanConfig.availableOptions![option] = price;
+            }
+          }
+        }
+
+        cleanedPriceConfig[dimension] = cleanConfig;
+      }
+
+      const updateDoc = {
+        productId: productData.id,
+        priceConfiguration: cleanedPriceConfig,
+      };
+
+      const result = await productCacheModel.updateOne(
+        { productId: productData.id },
+        { $set: updateDoc },
         { upsert: true },
       );
 
-      console.log(`✅ Updated cache for product: ${product.id}`);
-    } catch (err) {
-      if (err instanceof Error) {
-        console.error(
-          `❌ Failed to update cache for ${product.id}:`,
-          err.message,
-        );
-      } else {
-        console.error(
-          `❌ Failed to update cache for ${product.id}:`,
-          String(err),
-        );
-      }
+      console.log(
+        `✅ ${result.upsertedId ? "Created" : "Updated"} cache for product: ${productData.id}`,
+      );
+    }
+  } catch (error) {
+    if (error instanceof Error) {
+      console.error(`❌ Failed to process message: ${value}`, error.message);
+    } else {
+      console.error(`❌ Failed to process message: ${value}`, String(error));
     }
   }
 };
