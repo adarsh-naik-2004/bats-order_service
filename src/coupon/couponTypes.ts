@@ -5,6 +5,7 @@ export interface Coupon {
   validUpto: Date;
   storeId: number;
   discount: number;
+  isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
