@@ -2,12 +2,11 @@ import { NextFunction, Request, Response } from "express";
 import couponModel from "./couponModel";
 import createHttpError from "http-errors";
 import { ROLES } from "../types";
-import { AuthRequest } from "../types"; 
+import { AuthRequest } from "../types";
 
 export class CouponController {
   create = async (req: Request, res: Response) => {
     const { title, code, validUpto, discount, storeId } = req.body;
-
 
     const coupon = await couponModel.create({
       title,
@@ -19,7 +18,6 @@ export class CouponController {
 
     return res.json(coupon);
   };
-
 
   verify = async (req: Request, res: Response, next: NextFunction) => {
     const { code, storeId } = req.body;
@@ -53,7 +51,7 @@ export class CouponController {
     }
 
     if (isActive !== undefined) {
-      filter.isActive = isActive === 'true';
+      filter.isActive = isActive === "true";
     }
 
     // Calculate pagination
@@ -63,14 +61,19 @@ export class CouponController {
 
     const [coupons, total] = await Promise.all([
       couponModel.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit),
-      couponModel.countDocuments(filter)
+      couponModel.countDocuments(filter),
     ]);
 
+    const responseCoupons = coupons.map((coupon) => ({
+      ...coupon.toObject(),
+      id: coupon._id.toString(),
+    }));
+
     return res.json({
-      data: coupons,
+      data: responseCoupons,
       total,
       page,
-      totalPages: Math.ceil(total / limit)
+      totalPages: Math.ceil(total / limit),
     });
   };
 
@@ -84,16 +87,24 @@ export class CouponController {
       return next(createHttpError(404, "Coupon not found"));
     }
 
-
-    if (role === ROLES.MANAGER && String(coupon.storeId) !== String(userStoreId)) {
+    if (
+      role === ROLES.MANAGER &&
+      String(coupon.storeId) !== String(userStoreId)
+    ) {
       return next(createHttpError(403, "Not authorized to update this coupon"));
     }
 
-    if (role === ROLES.MANAGER && updateData.storeId && updateData.storeId !== userStoreId) {
+    if (
+      role === ROLES.MANAGER &&
+      updateData.storeId &&
+      updateData.storeId !== userStoreId
+    ) {
       return next(createHttpError(403, "Cannot change store association"));
     }
 
-    const updatedCoupon = await couponModel.findByIdAndUpdate(id, updateData, { new: true });
+    const updatedCoupon = await couponModel.findByIdAndUpdate(id, updateData, {
+      new: true,
+    });
     res.json(updatedCoupon);
   };
 
@@ -106,16 +117,19 @@ export class CouponController {
       return next(createHttpError(404, "Coupon not found"));
     }
 
-    if (role === ROLES.MANAGER && String(coupon.storeId) !== String(userStoreId)) {
+    if (
+      role === ROLES.MANAGER &&
+      String(coupon.storeId) !== String(userStoreId)
+    ) {
       return next(createHttpError(403, "Not authorized to delete this coupon"));
     }
 
     const updatedCoupon = await couponModel.findByIdAndUpdate(
       id,
       { isActive: false },
-      { new: true }
+      { new: true },
     );
-    
+
     res.json({ message: "Coupon deactivated", coupon: updatedCoupon });
   };
 
@@ -128,16 +142,19 @@ export class CouponController {
       return next(createHttpError(404, "Coupon not found"));
     }
 
-    if (role === ROLES.MANAGER && String(coupon.storeId) !== String(userStoreId)) {
+    if (
+      role === ROLES.MANAGER &&
+      String(coupon.storeId) !== String(userStoreId)
+    ) {
       return next(createHttpError(403, "Not authorized to modify this coupon"));
     }
 
     const updatedCoupon = await couponModel.findByIdAndUpdate(
       id,
       { isActive: true },
-      { new: true }
+      { new: true },
     );
-    
+
     res.json({ message: "Coupon reactivated", coupon: updatedCoupon });
   };
 }
