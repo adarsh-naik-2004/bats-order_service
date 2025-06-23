@@ -42,7 +42,7 @@ export class CouponController {
   };
   getAll = async (req: AuthRequest, res: Response) => {
     const { role, store: userStoreId } = req.auth;
-    const { storeId, isActive } = req.query;
+    const { storeId, isActive, currentPage = 1, perPage = 10 } = req.query;
 
     const filter: Record<string, unknown> = {};
 
@@ -56,8 +56,22 @@ export class CouponController {
       filter.isActive = isActive === 'true';
     }
 
-    const coupons = await couponModel.find(filter).sort({ createdAt: -1 });
-    return res.json(coupons);
+    // Calculate pagination
+    const page = Number(currentPage);
+    const limit = Number(perPage);
+    const skip = (page - 1) * limit;
+
+    const [coupons, total] = await Promise.all([
+      couponModel.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit),
+      couponModel.countDocuments(filter)
+    ]);
+
+    return res.json({
+      data: coupons,
+      total,
+      page,
+      totalPages: Math.ceil(total / limit)
+    });
   };
 
   update = async (req: AuthRequest, res: Response, next: NextFunction) => {
