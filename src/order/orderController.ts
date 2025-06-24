@@ -159,33 +159,50 @@ export class OrderController {
       return next(createHttpError(403, "Not allowed."));
     }
 
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 10;
+    const skip = (page - 1) * limit;
+
     if (role === ROLES.ADMIN) {
-      const filter = {};
+      const filter: Record<string, unknown> = {};
+      if (storeId) filter.storeId = storeId;
 
-      if (storeId) {
-        filter["storeId"] = storeId;
-      }
+      const [orders, total] = await Promise.all([
+        orderModel
+          .find(filter)
+          .populate("customerId")
+          .sort({ createdAt: -1 })
+          .skip(skip)
+          .limit(limit)
+          .exec(),
+        orderModel.countDocuments(filter),
+      ]);
 
-      // todo: VERY IMPORTANT. add pagination.
-      const orders = await orderModel
-        .find(filter, {}, { sort: { createdAt: -1 } })
-        .populate("customerId")
-        .exec();
-
-      return res.json(orders);
+      return res.json({
+        data: orders,
+        total,
+        page,
+        limit,
+      });
     }
 
     if (role === ROLES.MANAGER) {
-      const orders = await orderModel
-        .find({ storeId: userStoreId }, {}, { sort: { createdAt: -1 } })
-        .populate("customerId")
-        .exec();
+      const [orders, total] = await Promise.all([
+        orderModel.find({ storeId: parseInt(userStoreId) })
+          .populate("customerId")
+          .sort({ createdAt: -1 })
+          .skip(skip)
+          .limit(limit)
+          .exec(),
+        orderModel.countDocuments({ storeId: parseInt(userStoreId) })
+      ]);
 
-      if (!orders) {
-        return next(createHttpError(400, "No orders found."));
-      }
-
-      return res.json(orders);
+      return res.json({ 
+        data: orders, 
+        total,
+        page,
+        limit
+      });
     }
 
     return next(createHttpError(403, "Not allowed."));
