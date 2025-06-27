@@ -4,7 +4,6 @@ import {
   CartItem,
   ROLES,
   AuthRequest,
-  ProductPriceConfiguration,
 } from "../types";
 import couponModel from "../coupon/couponModel";
 import orderModel from "./orderModel";
@@ -349,36 +348,69 @@ export class OrderController {
 
   private calculateTotal = async (cart: CartItem[]) => {
     try {
-      // Extract product IDs and accessory IDs from cart
+      // Extract product IDs from cart
       const productIds = cart.map((item) => item._id);
+      console.log("Fetching prices for product IDs:", productIds);
 
       const response = await axios.post(
         `${Config.collection.serviceUrl}/products/prices`,
         { ids: productIds },
-        { timeout: 5000 },
+        { timeout: 15000 }, // Increased timeout
       );
 
+      console.log("Received price response:", response.data);
+
       const products = response.data as {
-        _id: string;
-        priceConfiguration: ProductPriceConfiguration;
+        id: string; // Note: this is "id" not "_id"
+        priceConfiguration: Record<
+          string,
+          {
+            priceType: string;
+            availableOptions: Record<string, number>;
+            _id?: string; // Handle the optional _id field
+          }
+        >;
       }[];
 
       // Create lookup maps for faster access
-      const productMap = new Map<string, ProductPriceConfiguration>(
-        products.map((p) => [p._id, p.priceConfiguration]),
-      );
+      const productMap = new Map<
+        string,
+        Record<string, { availableOptions: Record<string, number> }>
+      >();
+
+      products.forEach((p) => {
+        // Create a simplified structure without _id fields
+        const simplifiedConfig: Record<
+          string,
+          { availableOptions: Record<string, number> }
+        > = {};
+
+        Object.entries(p.priceConfiguration).forEach(([dimension, config]) => {
+          simplifiedConfig[dimension] = {
+            availableOptions: config.availableOptions,
+          };
+        });
+
+        productMap.set(p.id, simplifiedConfig);
+      });
 
       // Calculate total price
       return cart.reduce((total, item) => {
         const productPriceConfig = productMap.get(item._id);
 
         if (!productPriceConfig) {
-          throw new Error(
-            `Missing price configuration for product ${item._id}`,
-          );
+          console.error(`Missing price config for product: ${item._id}`);
+          throw new Error(`Price config missing for product ${item._id}`);
         }
 
-        // Calculate product base price
+        // Validate chosen configuration
+        if (
+          !item.chosenConfiguration ||
+          !item.chosenConfiguration.priceConfiguration
+        ) {
+          throw new Error(`Missing configuration for product ${item._id}`);
+        }
+
         const productPrice = Object.entries(
           item.chosenConfiguration.priceConfiguration,
         ).reduce((sum, [dimension, option]) => {
@@ -402,7 +434,10 @@ export class OrderController {
         return total + item.qty * productPrice;
       }, 0);
     } catch (error) {
-      console.error("Price calculation failed:", error);
+      console.error("Price calculation failed:", {
+        error: error.message,
+        stack: error.stack,
+      });
 
       if (axios.isAxiosError(error)) {
         console.error("Axios error details:", {
