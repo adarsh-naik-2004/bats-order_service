@@ -6,7 +6,7 @@ export class NotificationService {
   private baseUrl: string;
 
   constructor() {
-    this.baseUrl = Config.notification.ServiceUrl;
+    this.baseUrl = Config.notification.serviceUrl;
   }
 
   async sendEvent(eventType: string, data: Record<string, unknown>): Promise<void> {

@@ -38,12 +38,12 @@ export const Config = {
         webhookSecret: process.env.RAZORPAY_WEBHOOK_SECRET, 
     },
     notification: {
-        ServiceUrl: process.env.NOTIFICATION_SERVICE_URL,
+        serviceUrl: process.env.NOTIFICATION_SERVICE_URL,
     },
     collection: {
-        ServiceUrl: process.env.COLLECTION_SERVICE_URL,
+        serviceUrl: process.env.COLLECTION_SERVICE_URL,
     },
     websocket: {
-        ServiceUrl: process.env.WEBSOCKET_SERVICE_URL,
+        serviceUrl: process.env.WEBSOCKET_SERVICE_URL,
     }
 }

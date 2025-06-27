@@ -363,12 +363,12 @@ export class OrderController {
       // Fetch latest prices from collection service
       const [productsResponse, accessoriesResponse] = await Promise.all([
         axios.post(
-          `${Config.collection.ServiceUrl}/products/prices`,
+          `${Config.collection.serviceUrl}/products/prices`,
           { ids: productIds },
           { timeout: 5000 }, // 5 second timeout
         ),
         axios.post(
-          `${Config.collection.ServiceUrl}/accessorys/prices`,
+          `${Config.collection.serviceUrl}/accessorys/prices`,
           { ids: accessoryIds },
           { timeout: 5000 }, // 5 second timeout
         ),

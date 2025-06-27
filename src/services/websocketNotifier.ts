@@ -5,7 +5,7 @@ export class WebSocketNotifier {
   private baseUrl: string;
 
   constructor() {
-    this.baseUrl = Config.websocket.ServiceUrl;
+    this.baseUrl = Config.websocket.serviceUrl;
   }
 
   async sendEvent(event: Record<string, unknown>): Promise<void> {
