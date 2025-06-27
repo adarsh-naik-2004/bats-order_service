@@ -351,46 +351,21 @@ export class OrderController {
     try {
       // Extract product IDs and accessory IDs from cart
       const productIds = cart.map((item) => item._id);
-      const accessoryIds = cart.reduce<string[]>((acc, item) => {
-        return [
-          ...acc,
-          ...item.chosenConfiguration.selectedAccessorys.map(
-            (accessory) => accessory.id,
-          ),
-        ];
-      }, []);
 
-      // Fetch latest prices from collection service
-      const [productsResponse, accessoriesResponse] = await Promise.all([
-        axios.post(
-          `${Config.collection.serviceUrl}/products/prices`,
-          { ids: productIds },
-          { timeout: 5000 }, // 5 second timeout
-        ),
-        axios.post(
-          `${Config.collection.serviceUrl}/accessorys/prices`,
-          { ids: accessoryIds },
-          { timeout: 5000 }, // 5 second timeout
-        ),
-      ]);
+      const response = await axios.post(
+        `${Config.collection.serviceUrl}/products/prices`,
+        { ids: productIds },
+        { timeout: 5000 },
+      );
 
-      const products = productsResponse.data as {
+      const products = response.data as {
         _id: string;
         priceConfiguration: ProductPriceConfiguration;
-      }[];
-
-      const accessories = accessoriesResponse.data as {
-        _id: string;
-        price: number;
       }[];
 
       // Create lookup maps for faster access
       const productMap = new Map<string, ProductPriceConfiguration>(
         products.map((p) => [p._id, p.priceConfiguration]),
-      );
-
-      const accessoryMap = new Map<string, number>(
-        accessories.map((a) => [a._id, a.price]),
       );
 
       // Calculate total price
@@ -424,18 +399,7 @@ export class OrderController {
           return sum + price;
         }, 0);
 
-        // Calculate accessories price
-        const accessoriesPrice =
-          item.chosenConfiguration.selectedAccessorys.reduce(
-            (sum, accessory) => {
-              const price = accessoryMap.get(accessory.id) || accessory.price;
-              return sum + price;
-            },
-            0,
-          );
-
-        // Add to total with quantity
-        return total + item.qty * (productPrice + accessoriesPrice);
+        return total + item.qty * productPrice;
       }, 0);
     } catch (error) {
       console.error("Price calculation failed:", error);
