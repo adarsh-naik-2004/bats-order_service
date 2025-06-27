@@ -43,4 +43,7 @@ export const Config = {
     collection: {
         ServiceUrl: process.env.COLLECTION_SERVICE_URL,
     },
+    websocket: {
+        ServiceUrl: process.env.WEBSOCKET_SERVICE_URL,
+    }
 }

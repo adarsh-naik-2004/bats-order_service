@@ -4,7 +4,7 @@ import {
   CartItem,
   ROLES,
   AuthRequest,
-  ProductPriceConfiguration
+  ProductPriceConfiguration,
 } from "../types";
 import couponModel from "../coupon/couponModel";
 import orderModel from "./orderModel";
@@ -20,11 +20,13 @@ import createHttpError from "http-errors";
 import mongoose from "mongoose";
 import customerModel from "../customer/customerModel";
 import { NotificationService } from "../services/notificationService";
+import { WebSocketNotifier } from "../services/websocketNotifier";
 import { Config } from "../config/index";
 export class OrderController {
   constructor(
     private paymentGw: PaymentGW,
     private notificationService: NotificationService,
+    private websocketNotifier: WebSocketNotifier,
   ) {}
 
   create = async (req: Request, res: Response, next: NextFunction) => {
@@ -124,6 +126,12 @@ export class OrderController {
         return next(createHttpError(500, "Payment gateway error."));
       }
 
+      await this.websocketNotifier.sendEvent({
+        topic: "order",
+        event_type: OrderEvents.ORDER_CREATE,
+        data: { ...newOrder[0].toObject(), customerEmail: customer.email },
+      });
+
       await this.notificationService.sendEvent(OrderEvents.ORDER_CREATE, {
         ...newOrder[0],
         customerEmail: customer.email,
@@ -131,6 +139,12 @@ export class OrderController {
 
       return res.json({ razorpayOrderId: session.id, amount: finalTotal });
     }
+
+    await this.websocketNotifier.sendEvent({
+      topic: "order",
+      event_type: OrderEvents.ORDER_CREATE,
+      data: { ...newOrder[0].toObject(), customerEmail: customer.email },
+    });
 
     await this.notificationService.sendEvent(OrderEvents.ORDER_CREATE, {
       ...newOrder[0],
@@ -308,7 +322,15 @@ export class OrderController {
         console.log(`Customer not found for order: ${updatedOrder._id}`);
       }
 
-      
+      await this.websocketNotifier.sendEvent({
+        topic: "order",
+        event_type: OrderEvents.ORDER_STATUS_UPDATE,
+        data: {
+          orderId: updatedOrder._id.toString(),
+          ...updatedOrder.toObject(),
+          customerEmail: customer?.email,
+        },
+      });
 
       await this.notificationService.sendEvent(
         OrderEvents.ORDER_STATUS_UPDATE,
@@ -328,12 +350,12 @@ export class OrderController {
   private calculateTotal = async (cart: CartItem[]) => {
     try {
       // Extract product IDs and accessory IDs from cart
-      const productIds = cart.map(item => item._id);
+      const productIds = cart.map((item) => item._id);
       const accessoryIds = cart.reduce<string[]>((acc, item) => {
         return [
           ...acc,
           ...item.chosenConfiguration.selectedAccessorys.map(
-            accessory => accessory.id
+            (accessory) => accessory.id,
           ),
         ];
       }, []);
@@ -343,13 +365,13 @@ export class OrderController {
         axios.post(
           `${Config.collection.ServiceUrl}/products/prices`,
           { ids: productIds },
-          { timeout: 5000 } // 5 second timeout
+          { timeout: 5000 }, // 5 second timeout
         ),
         axios.post(
           `${Config.collection.ServiceUrl}/accessorys/prices`,
           { ids: accessoryIds },
-          { timeout: 5000 } // 5 second timeout
-        )
+          { timeout: 5000 }, // 5 second timeout
+        ),
       ]);
 
       const products = productsResponse.data as {
@@ -364,61 +386,62 @@ export class OrderController {
 
       // Create lookup maps for faster access
       const productMap = new Map<string, ProductPriceConfiguration>(
-        products.map(p => [p._id, p.priceConfiguration])
+        products.map((p) => [p._id, p.priceConfiguration]),
       );
 
       const accessoryMap = new Map<string, number>(
-        accessories.map(a => [a._id, a.price])
+        accessories.map((a) => [a._id, a.price]),
       );
 
       // Calculate total price
       return cart.reduce((total, item) => {
         const productPriceConfig = productMap.get(item._id);
-        
+
         if (!productPriceConfig) {
           throw new Error(
-            `Missing price configuration for product ${item._id}`
+            `Missing price configuration for product ${item._id}`,
           );
         }
 
         // Calculate product base price
         const productPrice = Object.entries(
-          item.chosenConfiguration.priceConfiguration
+          item.chosenConfiguration.priceConfiguration,
         ).reduce((sum, [dimension, option]) => {
           const dimensionConfig = productPriceConfig[dimension];
           if (!dimensionConfig) {
             throw new Error(
-              `Dimension '${dimension}' not found for product ${item._id}`
+              `Dimension '${dimension}' not found for product ${item._id}`,
             );
           }
-          
+
           const price = dimensionConfig.availableOptions[option];
           if (price === undefined) {
             throw new Error(
-              `Option '${option}' not found for dimension '${dimension}' in product ${item._id}`
+              `Option '${option}' not found for dimension '${dimension}' in product ${item._id}`,
             );
           }
-          
+
           return sum + price;
         }, 0);
 
         // Calculate accessories price
-        const accessoriesPrice = item.chosenConfiguration.selectedAccessorys.reduce(
-          (sum, accessory) => {
-            const price = accessoryMap.get(accessory.id) || accessory.price;
-            return sum + price;
-          }, 0
-        );
+        const accessoriesPrice =
+          item.chosenConfiguration.selectedAccessorys.reduce(
+            (sum, accessory) => {
+              const price = accessoryMap.get(accessory.id) || accessory.price;
+              return sum + price;
+            },
+            0,
+          );
 
         // Add to total with quantity
         return total + item.qty * (productPrice + accessoriesPrice);
       }, 0);
     } catch (error) {
-      console.error('Price calculation failed:', error);
-      throw new Error('Failed to calculate order total');
+      console.error("Price calculation failed:", error);
+      throw new Error("Failed to calculate order total");
     }
   };
-
 
   private getDiscountPercentage = async (
     couponCode: string,

@@ -4,12 +4,14 @@ import { asyncWrapper } from "../utils";
 import { OrderController } from "./orderController";
 import { RazorpayGW } from "../payment/razorpay";
 import { NotificationService } from "../services/notificationService"; 
+import { WebSocketNotifier } from "../services/websocketNotifier";
 const router = express.Router();
 
 const paymentGw = new RazorpayGW();
 const notificationService = new NotificationService(); 
+const websocketNotifier = new WebSocketNotifier();
 
-const orderController = new OrderController(paymentGw, notificationService );
+const orderController = new OrderController(paymentGw, notificationService, websocketNotifier);
 
 router.post("/", authenticate, asyncWrapper(orderController.create));
 
