@@ -143,7 +143,11 @@ export class OrderController {
     await this.websocketNotifier.sendEvent({
       topic: "order",
       event_type: OrderEvents.ORDER_CREATE,
-      data: { ...orderDoc.toObject(), customerEmail: customer.email },
+      data: {
+        ...orderDoc.toObject(),
+        customerEmail: customer.email,
+        storeId,
+      },
     });
 
     await this.notificationService.sendEvent(OrderEvents.ORDER_CREATE, {
@@ -326,9 +330,9 @@ export class OrderController {
         topic: "order",
         event_type: OrderEvents.ORDER_STATUS_UPDATE,
         data: {
-          orderId: updatedOrder._id.toString(),
           ...updatedOrder.toObject(),
           customerEmail: customer?.email,
+          storeId: updatedOrder.storeId,
         },
       });
 
