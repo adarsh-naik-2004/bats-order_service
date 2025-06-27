@@ -2,14 +2,14 @@ import express from "express";
 import authenticate from "../common/middleware/authenticate";
 import { asyncWrapper } from "../utils";
 import { OrderController } from "./orderController";
-import { createMessageBroker } from "../common/factories/brokerFactory";
 import { RazorpayGW } from "../payment/razorpay";
+import { NotificationService } from "../services/notificationService"; 
 const router = express.Router();
 
 const paymentGw = new RazorpayGW();
-const broker = createMessageBroker();
+const notificationService = new NotificationService(); 
 
-const orderController = new OrderController(paymentGw, broker);
+const orderController = new OrderController(paymentGw, notificationService );
 
 router.post("/", authenticate, asyncWrapper(orderController.create));
 

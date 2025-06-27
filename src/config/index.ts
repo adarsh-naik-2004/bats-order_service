@@ -1,4 +1,5 @@
 import { config } from 'dotenv'
+
 config()
 
 export const Config = {
@@ -35,5 +36,11 @@ export const Config = {
         keyId: process.env.RAZORPAY_KEY_ID,
         secretKey: process.env.RAZORPAY_SECRET_KEY,
         webhookSecret: process.env.RAZORPAY_WEBHOOK_SECRET, 
-    }
+    },
+    notification: {
+        ServiceUrl: process.env.NOTIFICATION_SERVICE_URL,
+    },
+    collection: {
+        ServiceUrl: process.env.COLLECTION_SERVICE_URL,
+    },
 }

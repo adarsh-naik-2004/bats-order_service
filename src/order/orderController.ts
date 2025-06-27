@@ -1,14 +1,11 @@
 import { NextFunction, Request, Response } from "express";
+import axios from "axios";
 import {
   CartItem,
-  ProductPricingCache,
-  Accessory,
-  AccessoryPriceCache,
   ROLES,
   AuthRequest,
+  ProductPriceConfiguration
 } from "../types";
-import productCacheModel from "../productCache/productCacheModel";
-import accessoryCacheModel from "../accessoryCache/accessoryCacheModel";
 import couponModel from "../coupon/couponModel";
 import orderModel from "./orderModel";
 import {
@@ -18,15 +15,16 @@ import {
   PaymentStatus,
 } from "./orderTypes";
 import { PaymentGW } from "../payment/paymentTypes";
-import { MessageBroker } from "../types/broker";
 import idempotencyModel from "../idempotency/idempotencyModel";
 import createHttpError from "http-errors";
 import mongoose from "mongoose";
 import customerModel from "../customer/customerModel";
+import { NotificationService } from "../services/notificationService";
+import { Config } from "../config/index";
 export class OrderController {
   constructor(
     private paymentGw: PaymentGW,
-    private broker: MessageBroker,
+    private notificationService: NotificationService,
   ) {}
 
   create = async (req: Request, res: Response, next: NextFunction) => {
@@ -113,11 +111,6 @@ export class OrderController {
       }
     }
 
-    const brokerMessage = {
-      event_type: OrderEvents.ORDER_CREATE,
-      data: { ...newOrder[0], customerEmail: customer.email },
-    };
-
     if (paymentMode === PaymentMode.CARD) {
       const session = await this.paymentGw.createSession({
         amount: finalTotal,
@@ -131,20 +124,18 @@ export class OrderController {
         return next(createHttpError(500, "Payment gateway error."));
       }
 
-      await this.broker.sendMessage(
-        "order",
-        JSON.stringify(brokerMessage),
-        newOrder[0]._id.toString(),
-      );
+      await this.notificationService.sendEvent(OrderEvents.ORDER_CREATE, {
+        ...newOrder[0],
+        customerEmail: customer.email,
+      });
 
       return res.json({ razorpayOrderId: session.id, amount: finalTotal });
     }
 
-    await this.broker.sendMessage(
-      "order",
-      JSON.stringify(brokerMessage),
-      newOrder[0]._id.toString(),
-    );
+    await this.notificationService.sendEvent(OrderEvents.ORDER_CREATE, {
+      ...newOrder[0],
+      customerEmail: customer.email,
+    });
 
     return res.json({ newOrder: newOrder });
   };
@@ -188,20 +179,21 @@ export class OrderController {
 
     if (role === ROLES.MANAGER) {
       const [orders, total] = await Promise.all([
-        orderModel.find({ storeId: parseInt(userStoreId) })
+        orderModel
+          .find({ storeId: parseInt(userStoreId) })
           .populate("customerId")
           .sort({ createdAt: -1 })
           .skip(skip)
           .limit(limit)
           .exec(),
-        orderModel.countDocuments({ storeId: parseInt(userStoreId) })
+        orderModel.countDocuments({ storeId: parseInt(userStoreId) }),
       ]);
 
-      return res.json({ 
-        data: orders, 
+      return res.json({
+        data: orders,
         total,
         page,
-        limit
+        limit,
       });
     }
 
@@ -316,19 +308,15 @@ export class OrderController {
         console.log(`Customer not found for order: ${updatedOrder._id}`);
       }
 
-      const brokerMessage = {
-        event_type: OrderEvents.ORDER_STATUS_UPDATE,
-        data: {
+      
+
+      await this.notificationService.sendEvent(
+        OrderEvents.ORDER_STATUS_UPDATE,
+        {
           orderId: updatedOrder._id.toString(),
           ...updatedOrder.toObject(),
           customerEmail: customer?.email,
         },
-      };
-
-      await this.broker.sendMessage(
-        "order",
-        JSON.stringify(brokerMessage),
-        updatedOrder._id.toString(),
       );
 
       return res.json({ _id: updatedOrder._id });
@@ -337,133 +325,100 @@ export class OrderController {
     return next(createHttpError(403, "Not allowed."));
   };
 
-  private async verifyProductCache(productIds: string[]) {
-    const cachedProducts = await productCacheModel.find({
-      productId: { $in: productIds },
-    });
-
-    const missingIds = productIds.filter(
-      (id) => !cachedProducts.some((p) => p.productId === id),
-    );
-
-    if (missingIds.length > 0) {
-      throw new Error(
-        `Missing price configurations for products: ${missingIds.join(", ")}. ` +
-          `Sync catalog data first.`,
-      );
-    }
-  }
-
   private calculateTotal = async (cart: CartItem[]) => {
-    const productIds = cart.map((item) => item._id);
+    try {
+      // Extract product IDs and accessory IDs from cart
+      const productIds = cart.map(item => item._id);
+      const accessoryIds = cart.reduce<string[]>((acc, item) => {
+        return [
+          ...acc,
+          ...item.chosenConfiguration.selectedAccessorys.map(
+            accessory => accessory.id
+          ),
+        ];
+      }, []);
 
-    await this.verifyProductCache(productIds);
-
-    const productPricings = await productCacheModel
-      .find({
-        productId: {
-          $in: productIds,
-        },
-      })
-      .lean({ flattenMaps: true });
-
-    // 1. call catalog service.
-    // 2. Use price from cart <- BAD
-
-    const cartAccessoryIds = cart.reduce((acc, item) => {
-      return [
-        ...acc,
-        ...item.chosenConfiguration.selectedAccessorys.map(
-          (accessory) => accessory.id,
+      // Fetch latest prices from collection service
+      const [productsResponse, accessoriesResponse] = await Promise.all([
+        axios.post(
+          `${Config.collection.ServiceUrl}/products/prices`,
+          { ids: productIds },
+          { timeout: 5000 } // 5 second timeout
         ),
-      ];
-    }, []);
+        axios.post(
+          `${Config.collection.ServiceUrl}/accessorys/prices`,
+          { ids: accessoryIds },
+          { timeout: 5000 } // 5 second timeout
+        )
+      ]);
 
-    const accessoryPricings = await accessoryCacheModel.find({
-      accessoryId: {
-        $in: cartAccessoryIds,
-      },
-    });
+      const products = productsResponse.data as {
+        _id: string;
+        priceConfiguration: ProductPriceConfiguration;
+      }[];
 
-    const totalPrice = cart.reduce((acc, curr) => {
-      const cachedProductPrice = productPricings.find(
-        (product) => product.productId === curr._id,
+      const accessories = accessoriesResponse.data as {
+        _id: string;
+        price: number;
+      }[];
+
+      // Create lookup maps for faster access
+      const productMap = new Map<string, ProductPriceConfiguration>(
+        products.map(p => [p._id, p.priceConfiguration])
       );
 
-      return (
-        acc +
-        curr.qty *
-          this.getItemTotal(curr, cachedProductPrice, accessoryPricings)
+      const accessoryMap = new Map<string, number>(
+        accessories.map(a => [a._id, a.price])
       );
-    }, 0);
 
-    return totalPrice;
-  };
+      // Calculate total price
+      return cart.reduce((total, item) => {
+        const productPriceConfig = productMap.get(item._id);
+        
+        if (!productPriceConfig) {
+          throw new Error(
+            `Missing price configuration for product ${item._id}`
+          );
+        }
 
-  private getItemTotal = (
-    item: CartItem,
-    cachedProductPrice: ProductPricingCache | undefined,
-    accessorysPricings: AccessoryPriceCache[],
-  ) => {
-    if (!cachedProductPrice?.priceConfiguration) {
-      throw new Error(
-        `Missing price configuration for product ${item._id}. ` +
-          `Sync catalog data first.`,
-      );
-    }
+        // Calculate product base price
+        const productPrice = Object.entries(
+          item.chosenConfiguration.priceConfiguration
+        ).reduce((sum, [dimension, option]) => {
+          const dimensionConfig = productPriceConfig[dimension];
+          if (!dimensionConfig) {
+            throw new Error(
+              `Dimension '${dimension}' not found for product ${item._id}`
+            );
+          }
+          
+          const price = dimensionConfig.availableOptions[option];
+          if (price === undefined) {
+            throw new Error(
+              `Option '${option}' not found for dimension '${dimension}' in product ${item._id}`
+            );
+          }
+          
+          return sum + price;
+        }, 0);
 
-    const accessorysTotal = item.chosenConfiguration.selectedAccessorys.reduce(
-      (acc, curr) =>
-        acc + this.getCurrentAccessoryPrice(curr, accessorysPricings),
-      0,
-    );
-
-    console.log(
-      "Available cached dimensions:",
-      Object.keys(cachedProductPrice.priceConfiguration),
-    );
-    console.log(
-      "Chosen dimensions:",
-      Object.keys(item.chosenConfiguration.priceConfiguration),
-    );
-
-    const productTotal = Object.entries(
-      item.chosenConfiguration.priceConfiguration,
-    ).reduce((acc, [dimensionName, selectedOption]) => {
-      const dimension = cachedProductPrice.priceConfiguration[dimensionName];
-      if (!dimension) {
-        throw new Error(
-          `Dimension '${dimensionName}' not found in cached product config.`,
+        // Calculate accessories price
+        const accessoriesPrice = item.chosenConfiguration.selectedAccessorys.reduce(
+          (sum, accessory) => {
+            const price = accessoryMap.get(accessory.id) || accessory.price;
+            return sum + price;
+          }, 0
         );
-      }
 
-      const price = dimension.availableOptions[selectedOption];
-      if (price === undefined) {
-        throw new Error(
-          `Option '${selectedOption}' not found for dimension '${dimensionName}' in cached config.`,
-        );
-      }
-
-      return acc + price;
-    }, 0);
-
-    return productTotal + accessorysTotal;
-  };
-
-  private getCurrentAccessoryPrice = (
-    accessory: Accessory,
-    accessoryPricings: AccessoryPriceCache[],
-  ) => {
-    const currentAccessory = accessoryPricings.find(
-      (current) => accessory.id === current.accessoryId,
-    );
-
-    if (!currentAccessory) {
-      return accessory.price;
+        // Add to total with quantity
+        return total + item.qty * (productPrice + accessoriesPrice);
+      }, 0);
+    } catch (error) {
+      console.error('Price calculation failed:', error);
+      throw new Error('Failed to calculate order total');
     }
-
-    return currentAccessory.price;
   };
+
 
   private getDiscountPercentage = async (
     couponCode: string,
