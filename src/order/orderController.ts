@@ -439,6 +439,16 @@ export class OrderController {
       }, 0);
     } catch (error) {
       console.error("Price calculation failed:", error);
+
+      if (axios.isAxiosError(error)) {
+        console.error("Axios error details:", {
+          url: error.config?.url,
+          status: error.response?.status,
+          data: error.response?.data,
+          headers: error.config?.headers,
+        });
+      }
+
       throw new Error("Failed to calculate order total");
     }
   };

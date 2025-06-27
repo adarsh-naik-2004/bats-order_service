@@ -12,6 +12,7 @@ const app = express();
 const ALLOWED_DOMAINS = [
   Config.frontend.clientUI,
   Config.frontend.adminUI,
+  'https://gateway.cricstore.icu',
 ];
 
 app.use(cors({ origin: ALLOWED_DOMAINS as string[], credentials: true }));
