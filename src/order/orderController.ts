@@ -1,10 +1,6 @@
 import { NextFunction, Request, Response } from "express";
 import axios from "axios";
-import {
-  CartItem,
-  ROLES,
-  AuthRequest,
-} from "../types";
+import { CartItem, ROLES, AuthRequest } from "../types";
 import couponModel from "../coupon/couponModel";
 import orderModel from "./orderModel";
 import {
@@ -112,10 +108,15 @@ export class OrderController {
       }
     }
 
+    let orderDoc = newOrder[0];
+    if (!(orderDoc instanceof mongoose.Document)) {
+      orderDoc = new orderModel(orderDoc);
+    }
+
     if (paymentMode === PaymentMode.CARD) {
       const session = await this.paymentGw.createSession({
         amount: finalTotal,
-        orderId: newOrder[0]._id.toString(),
+        orderId: orderDoc._id.toString(),
         storeId: storeId,
         currency: "INR",
         idempotencyKey: idempotencyKey as string,
@@ -128,11 +129,11 @@ export class OrderController {
       await this.websocketNotifier.sendEvent({
         topic: "order",
         event_type: OrderEvents.ORDER_CREATE,
-        data: { ...newOrder[0].toObject(), customerEmail: customer.email },
+        data: { ...orderDoc.toObject(), customerEmail: customer.email },
       });
 
       await this.notificationService.sendEvent(OrderEvents.ORDER_CREATE, {
-        ...newOrder[0],
+        ...orderDoc.toObject(),
         customerEmail: customer.email,
       });
 
@@ -142,15 +143,15 @@ export class OrderController {
     await this.websocketNotifier.sendEvent({
       topic: "order",
       event_type: OrderEvents.ORDER_CREATE,
-      data: { ...newOrder[0].toObject(), customerEmail: customer.email },
+      data: { ...orderDoc.toObject(), customerEmail: customer.email },
     });
 
     await this.notificationService.sendEvent(OrderEvents.ORDER_CREATE, {
-      ...newOrder[0],
+      ...orderDoc.toObject(),
       customerEmail: customer.email,
     });
 
-    return res.json({ newOrder: newOrder });
+    return res.json({ newOrder: [orderDoc] });
   };
 
   getAll = async (req: AuthRequest, res: Response, next: NextFunction) => {
