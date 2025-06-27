@@ -194,13 +194,13 @@ export class OrderController {
     if (role === ROLES.MANAGER) {
       const [orders, total] = await Promise.all([
         orderModel
-          .find({ storeId: parseInt(userStoreId) })
+          .find({ storeId: userStoreId })
           .populate("customerId")
           .sort({ createdAt: -1 })
           .skip(skip)
           .limit(limit)
           .exec(),
-        orderModel.countDocuments({ storeId: parseInt(userStoreId) }),
+        orderModel.countDocuments({ storeId: userStoreId }),
       ]);
 
       return res.json({
