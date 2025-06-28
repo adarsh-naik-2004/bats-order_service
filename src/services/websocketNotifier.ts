@@ -15,7 +15,7 @@ export class WebSocketNotifier {
         storeId: event.storeId || null,
       };
       
-      await axios.post(`${this.baseUrl}/order-update`, payload);
+      await axios.post(`${this.baseUrl}/notify-order`, payload);
     } catch (err) {
       console.error('Failed to send event to websocket service:', err);
     }
